@@ -1,59 +1,56 @@
-# =====================================
-# ANALYTICS + SERVING LAYER
-# =====================================
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import sum as _sum, avg, desc
+from pyspark.sql.functions import col, from_json, to_timestamp
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType
 import os
-import time
 
-start_time = time.time()
-print("========================================")
-print("       ANALYTICS LAYER STARTED          ")
-print("========================================")
+# Konfigurasi Path
+INPUT_FOLDER = "stream_data"
+OUTPUT_FOLDER = "data/serving/stream"
+CHECKPOINT_FOLDER = "data/serving/checkpoint"
 
+# Membuat folder output jika belum ada
+if not os.path.exists(OUTPUT_FOLDER):
+    os.makedirs(OUTPUT_FOLDER)
+
+# Initialize Spark Session
 spark = SparkSession.builder \
-    .appName("AnalyticsLayer") \
-    .master("local[*]") \
+    .appName("EcommerceAnalyticsServingLayer") \
+    .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true") \
     .getOrCreate()
 
-spark.sparkContext.setLogLevel("ERROR")
+spark.sparkContext.setLogLevel("WARN")
 
-if not os.path.exists("data/serving"):
-    os.makedirs("data/serving")
+# 1. Definisi Schema (harus cocok dengan JSON dari generator)
+schema = StructType([
+    StructField("user_id", IntegerType(), True),
+    StructField("product", StringType(), True),
+    StructField("price", DoubleType(), True),
+    StructField("city", StringType(), True),
+    StructField("timestamp", StringType(), True)
+])
 
-print("Loading Clean Parquet Data...")
-df_clean = spark.read.parquet("data/clean/parquet/")
-total_records = df_clean.count()
-print(f"Total Records: {total_records}")
+print(f"👀 Memulai monitoring folder: {INPUT_FOLDER}...")
 
-# KPI 1 - Total Revenue
-total_revenue = df_clean.agg(_sum("total_amount").alias("total_revenue"))
-total_revenue.show()
-total_revenue.write.mode("overwrite").option("header", True).csv("data/serving/total_revenue")
+# 2. Baca Data Streaming (Streaming DF)
+# Spark akan terus memantau folder INPUT_FOLDER untuk file JSON baru
+raw_stream_df = spark.readStream \
+    .schema(schema) \
+    .json(INPUT_FOLDER)
 
-# KPI 2 - Top 10 Products
-top_products = df_clean.groupBy("product") \
-    .agg(_sum("quantity").alias("total_quantity")) \
-    .orderBy(desc("total_quantity")).limit(10)
-top_products.show()
-top_products.write.mode("overwrite").option("header", True).csv("data/serving/top_products")
+# 3. Transformasi Data
+# - Ubah string timestamp menjadi tipe timestamp sungguhan
+# - Bersihkan nama produk (opsional, contoh)
+processed_stream_df = raw_stream_df \
+    .withColumn("timestamp", to_timestamp(col("timestamp"), "Y-M-d H:M:S"))
 
-# KPI 3 - Revenue per Category
-category_revenue = df_clean.groupBy("category") \
-    .agg(_sum("total_amount").alias("category_revenue")) \
-    .orderBy(desc("category_revenue"))
-category_revenue.show()
-category_revenue.write.mode("overwrite").option("header", True).csv("data/serving/category_revenue")
+# 4. Tulis Data ke Serving Layer (Format Parquet)
+# Data akan disimpan secara berkala (append) ke folderOUTPUT_FOLDER
+query = processed_stream_df.writeStream \
+    .outputMode("append") \
+    .format("parquet") \
+    .option("path", OUTPUT_FOLDER) \
+    .option("checkpointLocation", CHECKPOINT_FOLDER) \
+    .start()
 
-# KPI 4 - Avg Transaction per Customer
-avg_transaction = df_clean.groupBy("customer_id") \
-    .agg(avg("total_amount").alias("avg_transaction_value"))
-avg_transaction.show(5)
-avg_transaction.write.mode("overwrite").option("header", True).csv("data/serving/avg_transaction")
-
-spark.stop()
-end_time = time.time()
-print("========================================")
-print("   ANALYTICS LAYER COMPLETED SUCCESS    ")
-print(f"   Execution Time: {round(end_time - start_time, 2)} sec")
-print("========================================")
+# Biarkan Spark berjalan terus sampai dihentikan
+query.awaitTermination()

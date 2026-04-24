@@ -1,0 +1,13 @@
+venv/    
+nano .gitignore
+venv/
+__pycache__/
+.DS_Store
+data/raw/
+data/curated/
+data/serving/
+*.tgz
+
+
+
+
