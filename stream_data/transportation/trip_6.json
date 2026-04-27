@@ -1,0 +1,8 @@
+{
+    "trip_id": "TRX-0006",
+    "vehicle_type": "Car",
+    "location": "Bandung",
+    "distance": 10.33,
+    "fare": 24512,
+    "timestamp": "2026-04-27 21:41:08"
+}

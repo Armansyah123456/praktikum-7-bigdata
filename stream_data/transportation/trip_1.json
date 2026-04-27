@@ -1,0 +1,8 @@
+{
+    "trip_id": "TRX-0001",
+    "vehicle_type": "Motorbike",
+    "location": "Bandung",
+    "distance": 17.98,
+    "fare": 28975,
+    "timestamp": "2026-04-27 21:40:58"
+}

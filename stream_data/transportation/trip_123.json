@@ -1,0 +1,8 @@
+{
+    "trip_id": "TRX-0123",
+    "vehicle_type": "Taxi",
+    "location": "Jakarta",
+    "distance": 9.33,
+    "fare": 57530,
+    "timestamp": "2026-04-27 21:44:59"
+}
