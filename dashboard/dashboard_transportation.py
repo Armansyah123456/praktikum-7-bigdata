@@ -4,126 +4,238 @@ import sys
 import os
 import pandas as pd
 
-# --- FIX MODULE PATH ---
-# Menggunakan __file__ untuk mendapatkan direktori saat ini
+# =========================
+# FIX MODULE PATH
+# =========================
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+BASE_DIR = os.path.abspath(os.path.join(CURRENT_DIR,".."))
 
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
-# --- IMPORT MODULE ---
-# Pastikan file analytics.py dan alerts.py berada di folder yang benar
+# =========================
+# IMPORT MODULE
+# =========================
 try:
     from analytics import transportation_analytics as ta
     from alerts import transportation_alert as alert
 except ImportError as e:
-    st.error(f"Gagal mengimpor modul: {e}")
+    st.error(f"Gagal import modul: {e}")
     st.stop()
 
-# --- CONFIG ---
-DATA_PATH = "data/serving/transportation"
-REFRESH_INTERVAL = 5 # dalam detik
+
+# =========================
+# CONFIG
+# =========================
+DATA_PATH="data/serving/transportation"
+REFRESH_INTERVAL=5
 
 st.set_page_config(
     page_title="Smart Transportation Dashboard",
     layout="wide"
 )
 
-st.title("🚀 Smart Transportation Real-Time Analytics")
-st.markdown(f"**Data Source:** `{DATA_PATH}`")
+st.title("🚀 Smart Transportation Real-Time Analytics (Big Data Optimized)")
+st.markdown(f"Data Source : `{DATA_PATH}`")
 
-# --- PLACEHOLDER UNTUK AUTO-REFRESH ---
 placeholder = st.empty()
 
-# --- MAIN LOOP ---
+
+# =========================
+# MAIN LOOP
+# =========================
 while True:
+
     with placeholder.container():
-        # 1. LOAD DATA
+
+        # =========================
+        # LOAD DATA
+        # =========================
         df = ta.load_data(DATA_PATH)
 
         if df.empty:
             st.warning("Waiting for streaming transportation data...")
             time.sleep(REFRESH_INTERVAL)
-            st.rerun() # Menggantikan loop manual agar UI tetap responsif
+            st.rerun()
 
-        # 2. PREPROCESS
         df = ta.preprocess(df)
 
-        # 3. METRICS
+        # optimasi big data (downsampling)
+        df_sample = df.tail(1000)
+
+
+        # =========================
+        # METRICS
+        # =========================
         try:
             metrics = ta.compute_metrics(df)
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Total Trips", f"{metrics['total_trips']:,}")
-            with col2:
-                st.metric("Total Fare", f"Rp {int(metrics['total_fare']):,}")
-            with col3:
-                st.metric("Top Location", metrics["top_location"])
+
+            c1,c2,c3 = st.columns(3)
+
+            c1.metric(
+                "Total Trips",
+                f"{metrics['total_trips']:,}"
+            )
+
+            c2.metric(
+                "Total Fare",
+                f"Rp {int(metrics['total_fare']):,}"
+            )
+
+            c3.metric(
+                "Top Location",
+                metrics["top_location"]
+            )
+
         except Exception as e:
-            st.error(f"Error computing metrics: {e}")
+            st.error(f"Metrics error : {e}")
+
 
         st.divider()
 
-        # 4. PEAK HOUR & ALERTS
-        col_info, col_alert = st.columns(2)
-        
-        with col_info:
+
+        # =========================
+        # PEAK HOUR + ALERT
+        # =========================
+        info1,info2 = st.columns(2)
+
+        with info1:
             try:
                 peak_hour = ta.detect_peak_hour(df)
-                st.info(f"📍 **Peak Traffic Hour:** {peak_hour:02d}:00")
-            except Exception:
-                st.warning("Tidak dapat menghitung peak hour")
+                st.info(
+                    f"📍 Peak Traffic Hour : {peak_hour:02d}:00"
+                )
+            except:
+                st.warning("Peak hour tidak tersedia")
 
-        with col_alert:
+
+        with info2:
             try:
                 alerts = alert.generate_alert(df)
+
                 if alerts:
                     for a in alerts:
                         st.error(f"⚠️ {a}")
+
             except Exception as e:
-                st.warning(f"Alert error: {e}")
+                st.warning(
+                    f"Alert error : {e}"
+                )
 
         st.divider()
 
-        # 5. VISUALISASI
-        try:
-            v_col1, v_col2 = st.columns(2)
-            
-            with v_col1:
-                st.subheader("Fare per Location")
-                st.bar_chart(ta.fare_per_location(df))
-            
-            with v_col2:
-                st.subheader("Vehicle Distribution")
-                st.bar_chart(ta.vehicle_distribution(df))
 
-            st.subheader("Mobility Trend (Revenue)")
-            st.line_chart(ta.mobility_trend(df))
+        # =========================
+        # PRAKTIKUM 6 VISUALISASI
+        # =========================
+
+        # 1 TRAFFIC WINDOW (NEW)
+        st.subheader("📈 Real-Time Traffic (Windowed)")
+
+        try:
+            traffic_window = ta.traffic_per_window(df)
+
+            if traffic_window is not None:
+                st.line_chart(traffic_window)
+
         except Exception as e:
-            st.warning(f"Visualization error: {e}")
+            st.warning(
+                f"Traffic window error: {e}"
+            )
+
 
         st.divider()
 
-        # 6. ANOMALY DETECTION
+
+        # 2 TRAFFIC DENSITY + VEHICLE DISTRIBUTION
+        v1,v2 = st.columns(2)
+
+        with v1:
+            try:
+                st.subheader("🚖 Traffic Density Per Location")
+                st.bar_chart(
+                    ta.fare_per_location(df_sample)
+                )
+            except Exception as e:
+                st.warning(e)
+
+
+        with v2:
+            try:
+                st.subheader("🚗 Vehicle Distribution")
+                st.bar_chart(
+                    ta.vehicle_distribution(df_sample)
+                )
+            except Exception as e:
+                st.warning(e)
+
+
+        st.divider()
+
+
+        # 3 MOBILITY TREND (DOWNSAMPLED)
         try:
-            st.subheader("🚨 Abnormal Trips Detection")
-            anomaly_df = ta.detect_anomaly(df)
+            st.subheader("📉 Mobility Trend")
+            st.line_chart(
+                df_sample["fare"]
+            )
+
+        except Exception as e:
+            st.warning(
+                f"Mobility trend error: {e}"
+            )
+
+
+        st.divider()
+
+
+        # =========================
+        # ANOMALY
+        # =========================
+        try:
+            st.subheader(
+                "🚨 Abnormal Trips Detection"
+            )
+
+            anomaly_df = ta.detect_anomaly(df_sample)
+
             if not anomaly_df.empty:
-                st.dataframe(anomaly_df.tail(20), use_container_width=True)
+                st.dataframe(
+                    anomaly_df.tail(20),
+                    use_container_width=True
+                )
+
             else:
-                st.success("No anomalies detected")
+                st.success(
+                    "No anomalies detected"
+                )
+
         except Exception as e:
-            st.warning(f"Anomaly error: {e}")
+            st.warning(
+                f"Anomaly error : {e}"
+            )
+
 
         st.divider()
 
-        # 7. LIVE DATA TABLE
-        st.subheader("📋 Live Trip Data (Last 50 Records)")
-        st.dataframe(df.tail(50), use_container_width=True)
 
-        # Footer timestamp
-        st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        # =========================
+        # LIVE TABLE
+        # =========================
+        st.subheader(
+            "📋 Live Trip Data (50 Records)"
+        )
+
+        st.dataframe(
+            df.tail(50),
+            use_container_width=True
+        )
+
+
+        # footer
+        st.caption(
+            f"Last Updated : {time.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+
 
     time.sleep(REFRESH_INTERVAL)
